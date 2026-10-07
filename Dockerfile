@@ -6,14 +6,18 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
     aria2 \
+    git \
     nodejs \
-    npm && \
-    rm -rf /var/lib/apt/lists/*
+    npm \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
-RUN python -m pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
