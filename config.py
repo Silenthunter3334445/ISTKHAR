@@ -26,7 +26,7 @@ DURATION_LIMIT_MIN = int(getenv("DURATION_LIMIT", 900))
 LOGGER_ID = int(getenv("LOGGER_ID", None))
 
 # Get this value from @BRANDRD_ROBOT on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", "7980630836"))
+OWNER_ID = int(getenv("OWNER_ID", ""))
 
 LOG = int(getenv("LOG", True))
 
@@ -42,7 +42,7 @@ API_KEY = getenv("API_KEY", 'NxGBNexGenBots901703') # youtube song api ke
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/ISTKHAR-king/ISTKHAR_MUSIC",
+    "https://github.com/Silenthunter3334445/ISTKHAR",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "main")
 GIT_TOKEN = getenv(
