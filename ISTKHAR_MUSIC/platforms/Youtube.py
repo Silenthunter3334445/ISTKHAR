@@ -16,7 +16,7 @@ API_URL = os.environ.get(
 
 API_KEY = os.environ.get(
     "SHRUTI_API_KEY",
-    "ShrutiBots7EhoL3cMjnYD3VEhQDIA",
+    "",
 )
 
 DOWNLOAD_DIR = "downloads"
@@ -35,12 +35,14 @@ def time_to_seconds(value):
             seconds = seconds * 60 + int(part)
 
         return seconds
+
     except (ValueError, TypeError):
         return 0
 
 
 def clean_youtube_url(link: str) -> str:
-    """Remove unnecessary YouTube URL parameters."""
+    """Clean YouTube URL without breaking search queries."""
+
     if not link:
         return ""
 
@@ -48,17 +50,22 @@ def clean_youtube_url(link: str) -> str:
 
     if "youtube.com/watch" in link and "v=" in link:
         video_id = link.split("v=", 1)[1].split("&", 1)[0]
-        return f"https://www.youtube.com/watch?v={video_id}"
+
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
 
     if "youtu.be/" in link:
         video_id = link.split("youtu.be/", 1)[1].split("?", 1)[0]
-        return f"https://www.youtube.com/watch?v={video_id}"
 
-    return link.split("&", 1)[0]
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+    return link
 
 
 def get_video_id(link: str):
-    """Extract YouTube video ID."""
+    """Extract YouTube video ID safely."""
+
     if not link:
         return None
 
@@ -74,9 +81,15 @@ def get_video_id(link: str):
 
 
 async def download_song(link: str) -> Union[str, None]:
+    """Download audio through the configured API."""
+
     video_id = get_video_id(link)
 
     if not video_id or len(video_id) < 3:
+        return None
+
+    if not API_KEY:
+        print("SHRUTI_API_KEY is not configured.")
         return None
 
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -92,7 +105,10 @@ async def download_song(link: str) -> Union[str, None]:
     try:
         timeout = aiohttp.ClientTimeout(total=300)
 
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=timeout
+        ) as session:
+
             async with session.get(
                 f"{API_URL}/download",
                 params={
@@ -135,9 +151,15 @@ async def download_song(link: str) -> Union[str, None]:
 
 
 async def download_video(link: str) -> Union[str, None]:
+    """Download video through the configured API."""
+
     video_id = get_video_id(link)
 
     if not video_id or len(video_id) < 3:
+        return None
+
+    if not API_KEY:
+        print("SHRUTI_API_KEY is not configured.")
         return None
 
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -153,7 +175,10 @@ async def download_video(link: str) -> Union[str, None]:
     try:
         timeout = aiohttp.ClientTimeout(total=600)
 
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=timeout
+        ) as session:
+
             async with session.get(
                 f"{API_URL}/download",
                 params={
@@ -217,7 +242,7 @@ class YouTubeAPI:
         if not link:
             return False
 
-        return bool(re.search(self.regex, link))
+        return bool(re.search(self.regex, str(link)))
 
     async def url(
         self,
@@ -231,43 +256,49 @@ class YouTubeAPI:
 
         for message in messages:
 
-            if message.entities:
-                for entity in message.entities:
+            entities = message.entities or []
 
-                    if entity.type == MessageEntityType.URL:
-                        text = message.text or message.caption
+            for entity in entities:
 
-                        if not text:
-                            continue
+                if entity.type == MessageEntityType.TEXT_LINK:
+                    return entity.url
 
-                        return text[
-                            entity.offset:
-                            entity.offset + entity.length
-                        ]
+                if entity.type == MessageEntityType.URL:
+                    text = message.text or message.caption
 
-                    if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
+                    if not text:
+                        continue
 
-            if message.caption_entities:
-                for entity in message.caption_entities:
+                    return text[
+                        entity.offset:
+                        entity.offset + entity.length
+                    ]
 
-                    if entity.type == MessageEntityType.TEXT_LINK:
-                        return entity.url
+            caption_entities = message.caption_entities or []
 
-                    if entity.type == MessageEntityType.URL:
-                        text = message.caption
+            for entity in caption_entities:
 
-                        if not text:
-                            continue
+                if entity.type == MessageEntityType.TEXT_LINK:
+                    return entity.url
 
-                        return text[
-                            entity.offset:
-                            entity.offset + entity.length
-                        ]
+                if entity.type == MessageEntityType.URL:
+                    text = message.caption
+
+                    if not text:
+                        continue
+
+                    return text[
+                        entity.offset:
+                        entity.offset + entity.length
+                    ]
 
         return None
 
-    async def _search(self, query: str, limit=1):
+    async def _search(
+        self,
+        query: str,
+        limit: int = 1,
+    ):
         """Safe YouTube search."""
 
         if not query:
@@ -289,10 +320,18 @@ class YouTubeAPI:
             if not data:
                 return []
 
-            return data.get("result") or []
+            results = data.get("result")
+
+            if not results:
+                return []
+
+            return results
 
         except Exception as error:
-            print(f"YouTube search error: {error}")
+            print(
+                f"YouTube search error: "
+                f"{type(error).__name__}: {error}"
+            )
             return []
 
     async def details(
@@ -319,11 +358,11 @@ class YouTubeAPI:
 
         result = results[0]
 
-        title = result.get("title", "Unknown")
+        title = result.get("title") or "Unknown"
         duration_min = result.get("duration")
-        thumbnail = None
         vidid = result.get("id")
 
+        thumbnail = None
         thumbnails = result.get("thumbnails") or []
 
         if thumbnails:
@@ -347,7 +386,6 @@ class YouTubeAPI:
         link: str,
         videoid: Union[bool, str] = None,
     ):
-
         details = await self.details(link, videoid)
 
         return details[0]
@@ -357,7 +395,6 @@ class YouTubeAPI:
         link: str,
         videoid: Union[bool, str] = None,
     ):
-
         details = await self.details(link, videoid)
 
         return details[1]
@@ -367,7 +404,6 @@ class YouTubeAPI:
         link: str,
         videoid: Union[bool, str] = None,
     ):
-
         details = await self.details(link, videoid)
 
         return details[3]
@@ -390,9 +426,12 @@ class YouTubeAPI:
             return 0, "Video download failed."
 
         except Exception as error:
-            print(f"Video error: {error}")
+            print(
+                f"Video error: "
+                f"{type(error).__name__}: {error}"
+            )
 
-            return 0, f"Video download error: {error}"
+            return 0, "Video download failed."
 
     async def playlist(
         self,
@@ -428,7 +467,10 @@ class YouTubeAPI:
             return ids
 
         except Exception as error:
-            print(f"Playlist error: {error}")
+            print(
+                f"Playlist error: "
+                f"{type(error).__name__}: {error}"
+            )
             return []
 
     async def track(
@@ -436,6 +478,17 @@ class YouTubeAPI:
         link: str,
         videoid: Union[bool, str] = None,
     ):
+        """
+        Get YouTube track information.
+
+        Returns:
+            (details, video_id)
+            or
+            (None, None) if search fails.
+        """
+
+        if not link:
+            return None, None
 
         if videoid:
             link = self.base + str(link)
@@ -449,14 +502,19 @@ class YouTubeAPI:
 
         result = results[0]
 
-        title = result.get("title", "Unknown")
+        title = result.get("title") or "Unknown"
         duration_min = result.get("duration")
         vidid = result.get("id")
         yturl = result.get("link")
 
-        thumbnails = result.get("thumbnails") or []
+        if not vidid:
+            return None, None
+
+        if not yturl:
+            yturl = self.base + str(vidid)
 
         thumbnail = None
+        thumbnails = result.get("thumbnails") or []
 
         if thumbnails:
             thumbnail = thumbnails[0].get("url")
@@ -525,7 +583,10 @@ class YouTubeAPI:
                 return formats_available, link
 
         except Exception as error:
-            print(f"Formats error: {error}")
+            print(
+                f"Formats error: "
+                f"{type(error).__name__}: {error}"
+            )
             return [], link
 
     async def slider(
@@ -551,17 +612,21 @@ class YouTubeAPI:
             )
 
         try:
-            result = results[query_type]
-        except IndexError:
-            result = results[0]
+            query_type = int(query_type)
+        except (ValueError, TypeError):
+            query_type = 0
 
-        title = result.get("title")
+        if query_type < 0 or query_type >= len(results):
+            query_type = 0
+
+        result = results[query_type]
+
+        title = result.get("title") or "Unknown"
         duration_min = result.get("duration")
         vidid = result.get("id")
 
-        thumbnails = result.get("thumbnails") or []
-
         thumbnail = None
+        thumbnails = result.get("thumbnails") or []
 
         if thumbnails:
             thumbnail = thumbnails[0].get("url")
@@ -604,7 +669,11 @@ class YouTubeAPI:
             return None, False
 
         except Exception as error:
-            print(f"Download error: {error}")
+            print(
+                f"Download error: "
+                f"{type(error).__name__}: {error}"
+            )
+
             return None, False
 
 
